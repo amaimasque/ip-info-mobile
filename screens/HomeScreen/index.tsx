@@ -8,19 +8,20 @@ import {
   ToastAndroid,
   Text,
   FlatList,
-  Touchable,
   TouchableOpacity,
   Alert,
   BackHandler,
+  ScrollView,
 } from 'react-native';
 import React, {useCallback, useContext, useEffect, useState} from 'react';
+import CheckBox from '@react-native-community/checkbox';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import {NetworkInfo} from 'react-native-network-info';
 import {getIpInfo} from '../../api/ipInfo';
-import { AuthContext } from '../../providers/AuthProvider';
+import {AuthContext} from '../../providers/AuthProvider';
 import {LOGIN_ACTION_TYPES} from '../../reducers/login';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { replace } from '../../utils/RootNavigation';
+import {replace} from '../../utils/RootNavigation';
 
 const bg = require('../../assets/splashscreen.jpg');
 
@@ -84,12 +85,13 @@ function Home() {
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState(null);
   const [history, setHistory] = useState<string[]>([]);
+  const [selectedItems, setSelectedItems] = useState<number[]>([]);
   const {state, dispatch} = useContext(AuthContext);
 
   const getUserIP = useCallback(async () => {
     const ipAddress = await NetworkInfo.getIPAddress();
     setIp(ipAddress);
-    setTimeout(() => geIPInfo(ipAddress), 1000)
+    setTimeout(() => geIPInfo(ipAddress), 1000);
   }, []);
 
   const geIPInfo = useCallback(
@@ -115,10 +117,10 @@ function Home() {
   const handleOnLogout = async () => {
     dispatch({
       type: LOGIN_ACTION_TYPES.remove_credentials,
-    })
+    });
     await AsyncStorage.removeItem('user');
     replace('Login');
-  }
+  };
 
   useEffect(() => {
     getUserIP();
@@ -173,6 +175,27 @@ function Home() {
     [geIPInfo],
   );
 
+  const handleCheck = (checked: boolean, index: number) => {
+    if (!selectedItems.includes(index) && checked) {
+      setSelectedItems([...selectedItems, index]);
+    }
+    if (!checked && selectedItems.includes(index)) {
+      const selectedItemsCopy = [...selectedItems];
+      selectedItemsCopy.splice(selectedItems.indexOf(index), 1);
+      setSelectedItems([...selectedItemsCopy]);
+    }
+  };
+
+  const handleClearItems = () => {
+    let historyCopy = [...history];
+    historyCopy = historyCopy.filter(
+      (_, index) => !selectedItems.includes(index),
+    );
+    console.log(historyCopy, selectedItems);
+    setHistory([...historyCopy]);
+    setSelectedItems([]);
+  };
+
   return (
     <SafeAreaView>
       <ImageBackground source={bg} style={styles.background}>
@@ -205,33 +228,54 @@ function Home() {
             <Text style={styles.noInfo}>No information</Text>
           )}
           {response && !loading && (
-            <View>
+            <ScrollView>
               <Text style={styles.infoHeader}>Geo information</Text>
-              {Object.keys(response).map(key => (
-                <Text style={styles.infoText} key={key}>
+              {Object.keys(response).map((key, index) => (
+                <Text style={styles.infoText} key={key + index}>
                   {key}: {response ? `${response[key]}` : ''}
                 </Text>
               ))}
-            </View>
+            </ScrollView>
           )}
         </View>
         <View style={styles.informationPanel}>
           <FlatList
             data={history}
+            extraData={[selectedItems]}
             renderItem={({item, index}) => (
               <TouchableOpacity
                 style={styles.searchItem}
-                key={item + index}
+                key={`ip-${index}`}
                 onPress={() => handleSearchItemClick(item)}>
+                <CheckBox
+                  disabled={false}
+                  value={selectedItems.includes(index)}
+                  onValueChange={newValue => handleCheck(newValue, index)}
+                />
                 <Text>
                   {index + 1}. {item}
                 </Text>
                 <Icon name="chevron-right" />
               </TouchableOpacity>
             )}
-            keyExtractor={item => item}
+            keyExtractor={(item, index) => item + index}
             ListHeaderComponent={
-              <Text style={styles.infoHeader}>Recent searches</Text>
+              <View
+                // eslint-disable-next-line react-native/no-inline-styles
+                style={{
+                  display: 'flex',
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                }}>
+                <Text style={styles.infoHeader}>Recent searches</Text>
+                {selectedItems.length > 0 && (
+                  <Icon.Button
+                    name="trash"
+                    backgroundColor="#3b5998"
+                    onPress={handleClearItems}
+                  />
+                )}
+              </View>
             }
             ListEmptyComponent={
               <Text style={styles.noInfo}>No information</Text>
